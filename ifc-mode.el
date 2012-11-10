@@ -33,12 +33,20 @@
 ;;     enumerations need more schema parsing, also multiple jump targets
 ;;     (i.e. for UNDEFINED it's basically useless)
 
+(defvar ifc-base-url "http://www.buildingsmart-tech.org/ifc/IFC2x3/TC1/html/")
+(defvar ifc-docs-root ifc-base-url)
+
 (defvar ifc-spf-objects)
 (defvar ifc-spf-constants)
 
+(defvar ifc-names-to-interfaces)
+(defvar ifc-resources)
+(defvar ifc-names)
+
 ;; load definitions for ifc-spf-objects and ifc-spf-constants
 (load-file "generated/ifc2x3_tc1.el")
-(load-file "generated/ifc2x2_add1.el")
+;;(load-file "generated/ifc2x2_add1.el")
+(load-file "generated/ifc2x3_tc1.toc.el")
 
 (defvar step-file-keywords
   '("HEADER" "FILE_DESCRIPTION" "FILE_NAME" "FILE_SCHEMA" "ENDSEC" "DATA"
@@ -105,39 +113,10 @@ schema definition."
                                 enumerations))))))
   (values))
 
-(defun alist-for-element-urls (interface &rest names)
+(defun alist-for-element-urls (interface names)
   (mapcar (lambda (name)
             (cons name interface))
           names))
-
-(defvar ifc-names-to-interfaces
-  (append
-   (alist-for-element-urls
-    "IFCPRESENTATIONAPPEARANCERESOURCE"
-    "IFCSURFACETEXTUREENUM")
-   (alist-for-element-urls
-    "IFCGEOMETRYRESOURCE"
-    "IFCDIRECTION")
-   (alist-for-element-urls
-    "IFCUTILITYRESOURCE"
-    "IFCOWNERHISTORY")
-   (alist-for-element-urls
-    "IFCREPRESENTATIONRESOURCE"
-    "IFCGEOMETRICREPRESENTATIONSUBCONTEXT")))
-
-(defvar ifc-resources
-  '("IFCPRESENTATIONAPPEARANCERESOURCE"
-    "IFCGEOMETRYRESOURCE"
-    "IFCUTILITYRESOURCE"
-    "IFCREPRESENTATIONRESOURCE"))
-
-(defvar ifc-names
-  (append
-   (mapcar #'car ifc-names-to-interfaces)
-   ifc-resources))
-
-(defvar ifc-docs-root
-  "http://www.buildingsmart-tech.org/ifc/IFC2x3/TC1/html/")
 
 (defun resolve-element-url (name)
   (let* ((name (upcase name))
@@ -179,6 +158,42 @@ schema definition."
         (goto-char (match-beginning 1))
       (message "Couldn't find object `%s'" name)
       (goto-char (1- (point))))))
+
+(defvar ifc-toc-files
+  '("alphabeticalorder_definedtype.htm"
+    "alphabeticalorder_entities.htm"
+    "alphabeticalorder_enumtype.htm"
+    "alphabeticalorder_selecttype.htm"))
+
+(defun download-ifc-toc-files ()
+  (make-directory "html" t)
+  (dolist (html-file ifc-toc-files)
+    (url-copy-file (concat ifc-base-url html-file) (concat "html/" html-file))))
+
+(defun parse-ifc-toc-files ()
+  (setf ifc-names-to-interfaces nil
+        ifc-resources nil
+        ifc-names nil)
+  (dolist (html-file ifc-toc-files)
+    (with-current-buffer (find-file-noselect (concat "html/" html-file))
+      (goto-char (point-min))
+      (while (re-search-forward "A HREF=\"\\(.+?\\)/lexical/\\(.+?\\)\\.htm\"" nil t)
+        (let* ((interface (upcase (match-string 1)))
+               (type (upcase (match-string 2))))
+          (pushnew interface ifc-resources :test #'string=)
+          (push (cons type interface) ifc-names-to-interfaces)))))
+  (setf ifc-names (append (mapcar #'car ifc-names-to-interfaces)
+                          ifc-resources))
+  (values))
+
+(defun generate-ifc-tocs (output)
+  (parse-ifc-toc-files)
+  (with-temp-file output
+    (let ((standard-output (current-buffer)))
+      (print `(setf ifc-names-to-interfaces ',ifc-names-to-interfaces))
+      (print `(setf ifc-resources ',ifc-resources))
+      (print `(setf ifc-names ',ifc-names))))
+  (values))
 
 ;;;###autoload
 (defun ifc-docs-lookup (name)

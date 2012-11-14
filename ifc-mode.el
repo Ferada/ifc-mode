@@ -33,37 +33,44 @@
 ;;     enumerations need more schema parsing, also multiple jump targets
 ;;     (i.e. for UNDEFINED it's basically useless)
 
-(defvar ifc-base-url "http://www.buildingsmart-tech.org/ifc/IFC2x3/TC1/html/")
-(defvar ifc-docs-root ifc-base-url)
+(eval-and-compile
+  (defvar ifc-mode-path
+    (let ((path (or (locate-library "ifc-mode") load-file-name)))
+      (and path (file-name-directory path)))))
 
-(defvar ifc-spf-objects)
-(defvar ifc-spf-constants)
+(defvar ifc-mode-base-url "http://www.buildingsmart-tech.org/ifc/IFC2x3/TC1/html/")
+(defvar ifc-mode-docs-root ifc-mode-base-url)
 
-(defvar ifc-names-to-interfaces)
-(defvar ifc-resources)
-(defvar ifc-names)
+(defvar ifc-mode-spf-objects)
+(defvar ifc-mode-spf-constants)
 
-;; load definitions for ifc-spf-objects and ifc-spf-constants
-(load-file "generated/ifc2x3_tc1.el")
-;;(load-file "generated/ifc2x2_add1.el")
-(load-file "generated/ifc2x3_tc1.toc.el")
+(defvar ifc-mode-names-to-interfaces)
+(defvar ifc-mode-resources)
+(defvar ifc-mode-names)
 
-(defvar step-file-keywords
+(eval-when-compile
+  (defun ifc-mode-load-generated ()
+    ;; load definitions for ifc-spf-objects and ifc-spf-constants
+    (load-file (expand-file-name "generated/ifc2x3_tc1.el" ifc-mode-path))
+    (load-file (expand-file-name "generated/ifc2x3_tc1.toc.el" ifc-mode-path)))
+  (ifc-mode-load-generated))
+
+(defvar ifc-mode-step-file-keywords
   '("HEADER" "FILE_DESCRIPTION" "FILE_NAME" "FILE_SCHEMA" "ENDSEC" "DATA"
     "ISO-10303-21" "END-ISO-10303-21")
   "STEP-File keywords.")
 
-(defvar step-file-keywords-regexp (regexp-opt step-file-keywords 'symbol))
-(defvar ifc-spf-objects-regexp (regexp-opt ifc-spf-objects 'symbols))
-(defvar ifc-spf-constants-regexp (regexp-opt ifc-spf-constants 'symbols))
+(defvar ifc-mode-step-file-keywords-regexp (regexp-opt ifc-mode-step-file-keywords 'symbol))
+(defvar ifc-mode-spf-objects-regexp (regexp-opt ifc-mode-spf-objects 'symbols))
+(defvar ifc-mode-spf-constants-regexp (regexp-opt ifc-mode-spf-constants 'symbols))
 
-(defvar ifc-spf-font-lock-keywords
-  `((,step-file-keywords-regexp . font-lock-keyword-face)
+(defvar ifc-mode-spf-font-lock-keywords
+  `((,ifc-mode-step-file-keywords-regexp . font-lock-keyword-face)
     ;; more likely overkill
-    (,ifc-spf-objects-regexp . font-lock-function-name-face)
-    (,ifc-spf-constants-regexp . font-lock-constant-face)))
+    (,ifc-mode-spf-objects-regexp . font-lock-function-name-face)
+    (,ifc-mode-spf-constants-regexp . font-lock-constant-face)))
 
-(defvar ifc-spf-syntax-table
+(defvar ifc-mode-spf-syntax-table
   (let ((syntax-table (make-syntax-table)))
     (modify-syntax-entry ?\/ ". 14" syntax-table)
     (modify-syntax-entry ?* ". 23" syntax-table)
@@ -73,14 +80,15 @@
     (modify-syntax-entry ?= "." syntax-table)
     syntax-table))
 
+;;;###autoload
 (define-derived-mode ifc-spf-mode fundamental-mode
   "IFC-SPF"
   "Major mode for editing IFC (Industrial Foundation Classes) SPF
 \(STEP-File) files."
-  :syntax-table ifc-spf-syntax-table
-  (setf font-lock-defaults '((ifc-spf-font-lock-keywords))))
+  :syntax-table ifc-mode-spf-syntax-table
+  (setf font-lock-defaults '((ifc-mode-spf-font-lock-keywords))))
 
-(defun parse-schema-file (filename)
+(defun ifc-mode-parse-schema-file (filename)
   (let (types entities enumerations)
     (with-current-buffer (find-file-noselect filename)
       (goto-char (point-min))
@@ -98,43 +106,39 @@
             (push (match-string 0) enumerations)))))
     (values types entities enumerations)))
 
-(defun generate-syntax-from-schema (schema output)
+(defun ifc-mode-generate-syntax-from-schema (schema output)
   "Generates definitions for all types and enumerations from an EXPRESS
 schema definition."
   (multiple-value-bind (types entities enumerations)
-      (parse-schema-file schema)
+      (ifc-mode-parse-schema-file schema)
     (with-temp-file output
       (let ((standard-output (current-buffer)))
-        (print `(setf ifc-spf-objects
+        (print `(setf ifc-mode-spf-objects
                       ',(mapcar #'upcase (append types entities))))
-        (print `(setf ifc-spf-constants
-                      ',(mapcar (lambda (string)
-                                  (format ".%s." (upcase string)))
-                                enumerations))))))
+        (print `(setf ifc-mode-spf-constants
+                      '(".T." ".F."
+                        ,@(mapcar (lambda (string)
+                                    (format ".%s." (upcase string)))
+                                  enumerations)))))))
   (values))
 
-(defun alist-for-element-urls (interface names)
-  (mapcar (lambda (name)
-            (cons name interface))
-          names))
-
-(defun resolve-element-url (name)
+(defun ifc-mode-resolve-element-url (name)
   (let* ((name (upcase name))
-         (found (assoc name ifc-names-to-interfaces)))
+         (found (assoc name ifc-mode-names-to-interfaces)))
     (if found
         ;; downcase here just because the url looks nicer
-        (concat ifc-docs-root
+        (concat ifc-mode-docs-root
                 (format "%s/lexical/%s.htm"
                         (downcase (cdr found))
                         (downcase name)))
-      (let ((found (member name ifc-resources)))
+      (let ((found (member name ifc-mode-resources)))
         (if found
-            (concat ifc-docs-root
+            (concat ifc-mode-docs-root
                     (let ((downcased (downcase name)))
                       (format "%s/%s.htm"
                               downcased downcased))))))))
 
-(defun ifc-find-tag (name)
+(defun ifc-mode-find-tag (name)
   (interactive
    (let ((symbol (thing-at-point 'symbol)))
      (list symbol)))
@@ -146,7 +150,7 @@ schema definition."
         (goto-char (match-beginning 1))
       (message "Couldn't find object `%s'" name))))
 
-(defun ifc-find-usages (name)
+(defun ifc-mode-find-usages (name)
   (interactive
    (let ((symbol (thing-at-point 'symbol)))
      (list symbol)))
@@ -159,57 +163,59 @@ schema definition."
       (message "Couldn't find object `%s'" name)
       (goto-char (1- (point))))))
 
-(defvar ifc-toc-files
+(defvar ifc-mode-toc-files
   '("alphabeticalorder_definedtype.htm"
     "alphabeticalorder_entities.htm"
     "alphabeticalorder_enumtype.htm"
     "alphabeticalorder_selecttype.htm"))
 
-(defun download-ifc-toc-files ()
+(defun ifc-mode-download-toc-files ()
   (make-directory "html" t)
-  (dolist (html-file ifc-toc-files)
-    (url-copy-file (concat ifc-base-url html-file) (concat "html/" html-file))))
+  (dolist (html-file ifc-mode-toc-files)
+    (url-copy-file (concat ifc-mode-base-url html-file)
+                   (expand-file-name (concat "html/" html-file)
+                                     ifc-mode-path))))
 
-(defun parse-ifc-toc-files ()
-  (setf ifc-names-to-interfaces nil
-        ifc-resources nil
-        ifc-names nil)
-  (dolist (html-file ifc-toc-files)
-    (with-current-buffer (find-file-noselect (concat "html/" html-file))
+(defun ifc-mode-parse-toc-files ()
+  (setf ifc-mode-names-to-interfaces nil
+        ifc-mode-resources nil
+        ifc-mode-names nil)
+  (dolist (html-file ifc-mode-toc-files)
+    (with-current-buffer (find-file-noselect (expand-file-name (concat "html/" html-file) ifc-mode-path))
       (goto-char (point-min))
       (while (re-search-forward "A HREF=\"\\(.+?\\)/lexical/\\(.+?\\)\\.htm\"" nil t)
         (let* ((interface (upcase (match-string 1)))
                (type (upcase (match-string 2))))
-          (pushnew interface ifc-resources :test #'string=)
-          (push (cons type interface) ifc-names-to-interfaces)))))
-  (setf ifc-names (append (mapcar #'car ifc-names-to-interfaces)
-                          ifc-resources))
+          (pushnew interface ifc-mode-resources :test #'string=)
+          (push (cons type interface) ifc-mode-names-to-interfaces)))))
+  (setf ifc-mode-names (append (mapcar #'car ifc-mode-names-to-interfaces)
+                               ifc-mode-resources))
   (values))
 
-(defun generate-ifc-tocs (output)
-  (parse-ifc-toc-files)
+(defun ifc-mode-generate-tocs (output)
+  (ifc-mode-parse-toc-files)
   (with-temp-file output
     (let ((standard-output (current-buffer)))
-      (print `(setf ifc-names-to-interfaces ',ifc-names-to-interfaces))
-      (print `(setf ifc-resources ',ifc-resources))
-      (print `(setf ifc-names ',ifc-names))))
+      (print `(setf ifc-mode-names-to-interfaces ',ifc-mode-names-to-interfaces))
+      (print `(setf ifc-mode-resources ',ifc-mode-resources))
+      (print `(setf ifc-mode-names ',ifc-mode-names))))
   (values))
 
 ;;;###autoload
-(defun ifc-docs-lookup (name)
+(defun ifc-mode-docs-lookup (name)
   "View the documentation on NAME from the IFC documentation. "
   (interactive
    (let ((symbol (thing-at-point 'symbol))
          (enable-recursive-minibuffers t)
          (completion-ignore-case t)
          val)
-     (if (and symbol (member (upcase symbol) ifc-names))
+     (if (and symbol (member (upcase symbol) ifc-mode-names))
          (setf val symbol)
        (setf val (ido-completing-read
                   (if symbol
                       (format "Lookup IFC element (default %s): " symbol)
                     "Lookup IFC element: ")
-                  ifc-names nil t symbol nil)))
+                  ifc-mode-names nil t symbol nil)))
      (list (if (equal val "")
                symbol val))))
   (if (null name)

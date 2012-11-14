@@ -123,7 +123,6 @@
       (message "`%s' isn't a valid object reference" name)
     (ifc-mode-push-find-tag)
     (goto-char (point-min))
-    ;; "\\([[:space:]]\\|^\\|\\s(\\)\\(%s\\)\\([[:space:]]\\|\\s.\\|\\s)\\)*="
     (if (re-search-forward (format "\\_<\\(%s\\)\\_>[[:space:]]*=" name) nil t)
         (goto-char (match-beginning 1))
       (ifc-mode-pop-find-tag)
@@ -137,7 +136,6 @@
       (message "`%s' isn't a valid object reference" name)
     (ifc-mode-push-find-tag)
     (goto-char (1+ (point)))
-    ;; "\\([[:space:]]\\|^\\|\\s(\\|\\s.\\)\\(%s\\)\\([[:space:]]\\|\\s.\\|\\s)\\)"
     (if (re-search-forward (format "\\_<\\(%s\\)\\_>" name) nil t)
         (goto-char (match-beginning 1))
       (ifc-mode-pop-find-tag)

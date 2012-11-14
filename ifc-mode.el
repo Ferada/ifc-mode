@@ -74,12 +74,22 @@
     (modify-syntax-entry ?= "." syntax-table)
     syntax-table))
 
+(defvar ifc-mode-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "C-c C-d h") 'ifc-mode-docs-lookup)
+    (define-key map (kbd "M-.") 'ifc-mode-find-tag)
+    (define-key map (kbd "M-,") 'ifc-mode-pop-find-tag)
+    (define-key map (kbd "M-_") 'ifc-mode-find-uses)
+    (define-key map (kbd "M-?") 'ifc-mode-find-uses)
+    map))
+
 ;;;###autoload
 (define-derived-mode ifc-spf-mode fundamental-mode
   "IFC-SPF"
   "Major mode for editing IFC SPF files."
   :syntax-table ifc-mode-spf-syntax-table
-  (setf font-lock-defaults '((ifc-mode-spf-font-lock-keywords))))
+  (setf font-lock-defaults '((ifc-mode-spf-font-lock-keywords)))
+  (use-local-map ifc-mode-map))
 
 (defun ifc-mode-resolve-element-url (name)
   (let* ((name (upcase name))
@@ -97,30 +107,41 @@
                       (format "%s/%s.htm"
                               downcased downcased))))))))
 
+(defun ifc-mode-push-find-tag ()
+  (require 'etags)
+  (ring-insert find-tag-marker-ring (point-marker)))
+
+(defun ifc-mode-pop-find-tag ()
+  (interactive)
+  (pop-tag-mark))
+
 (defun ifc-mode-find-tag (name)
   (interactive
    (let ((symbol (thing-at-point 'symbol)))
      (list symbol)))
   (if (not (char-equal ?# (aref name 0)))
       (message "`%s' isn't a valid object reference" name)
+    (ifc-mode-push-find-tag)
     (goto-char (point-min))
     ;; "\\([[:space:]]\\|^\\|\\s(\\)\\(%s\\)\\([[:space:]]\\|\\s.\\|\\s)\\)*="
     (if (re-search-forward (format "\\_<\\(%s\\)\\_>[[:space:]]*=" name) nil t)
         (goto-char (match-beginning 1))
+      (ifc-mode-pop-find-tag)
       (message "Couldn't find object `%s'" name))))
 
-(defun ifc-mode-find-usages (name)
+(defun ifc-mode-find-uses (name)
   (interactive
    (let ((symbol (thing-at-point 'symbol)))
      (list symbol)))
   (if (not (char-equal ?# (aref name 0)))
       (message "`%s' isn't a valid object reference" name)
+    (ifc-mode-push-find-tag)
     (goto-char (1+ (point)))
     ;; "\\([[:space:]]\\|^\\|\\s(\\|\\s.\\)\\(%s\\)\\([[:space:]]\\|\\s.\\|\\s)\\)"
     (if (re-search-forward (format "\\_<\\(%s\\)\\_>" name) nil t)
         (goto-char (match-beginning 1))
-      (message "Couldn't find object `%s'" name)
-      (goto-char (1- (point))))))
+      (ifc-mode-pop-find-tag)
+      (message "Couldn't find object `%s'" name))))
 
 ;;;###autoload
 (defun ifc-mode-docs-lookup (name)
@@ -141,7 +162,7 @@
                symbol val))))
   (if (null name)
       (message "You didn't specify an IFC name")
-    (let ((url (resolve-element-url name)))
+    (let ((url (ifc-mode-resolve-element-url name)))
       (if url
           (browse-url url)
         (error "Couldn't find URL for `%s'." name)))))

@@ -21,6 +21,7 @@
 (defun ifc-mode-generate-syntax-from-schema (schema output)
   "Generates definitions for all types and enumerations from an EXPRESS
 schema definition."
+  (make-directory (file-name-directory output) t)
   (multiple-value-bind (types entities enumerations)
       (ifc-mode-parse-schema-file schema)
     (with-temp-file output

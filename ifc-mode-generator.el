@@ -1,4 +1,6 @@
-(load-file "ifc-mode-common.el")
+(let ((path (or (locate-library "ifc-mode") load-file-name)))
+  (load-file (expand-file-name "ifc-mode-common.el"
+  		       (file-name-directory path))))
 
 (defun ifc-mode-parse-schema-file (filename)
   (let (types entities enumerations)

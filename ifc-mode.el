@@ -33,7 +33,9 @@
 ;;     enumerations need more schema parsing, also multiple jump targets
 ;;     (i.e. for UNDEFINED it's basically useless)
 
-(load-file "ifc-mode-common.el")
+(let ((path (or (locate-library "ifc-mode") load-file-name)))
+  (load-file (expand-file-name "ifc-mode-common.el"
+  		       (file-name-directory path))))
 
 (defvar ifc-mode-spf-objects)
 (defvar ifc-mode-spf-constants)

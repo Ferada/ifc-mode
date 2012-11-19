@@ -30,6 +30,11 @@ default, the buffer is searched for a numeric tag at the point like
 `#42=`.  With `ifc-mode-find-uses`, bound to `M-_` and `M-?`, the buffer
 is searched for only `#42`, i.e. all uses of that ID.
 
+If you're using evil-mode, `evil-search-symbol-forward` and `-backward`
+can be used instead of `ifc-mode-find-uses`, because they do essentially
+the same (searching for the next symbol) and additionally wrap around
+the buffer.
+
 `ifc-mode-pop-find-tag`, or the default `pop-tag-mark`, restore the
 previous point.  (Wrap-around for `ifc-mode-find-uses` isn't yet
 implemented, but would definitely be useful to have.)
